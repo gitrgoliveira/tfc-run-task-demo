@@ -1,0 +1,4 @@
+provisioner\s+"remote-exec"
+provisioner\s+"local-exec"
+data\s+"external"
+resource\s+"toolbox
