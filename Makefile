@@ -16,10 +16,3 @@ run:
 clean:
 	@echo "Cleaning..."
 	@rm -f $(BINARY_NAME)
-
-test:
-	@echo "Testing..."
-	@go test
-	
-curl:
-	curl -X POST http://82.27.116.39 -d @payload.json
