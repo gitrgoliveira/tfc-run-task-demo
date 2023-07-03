@@ -16,3 +16,9 @@ run:
 clean:
 	@echo "Cleaning..."
 	@rm -f $(BINARY_NAME)
+
+buildDocker:
+	@docker build -t $(BINARY_NAME) .
+	
+runDocker: buildDocker
+	@docker run -p 80:80 $(BINARY_NAME)
