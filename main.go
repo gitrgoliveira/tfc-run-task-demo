@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
@@ -252,7 +251,7 @@ func sendPatchRequest(url string, payload []byte, authToken string) error {
 
 	defer resp.Body.Close()
 	// Read the response body
-	respBody, err := ioutil.ReadAll(resp.Body)
+	respBody, err := io.ReadAll(resp.Body)
 	if err != nil {
 		return err
 	}
@@ -382,7 +381,7 @@ func runRegexOnFolder(folderPath string, regexPatterns []string) map[string]int 
 		}
 
 		// Read the file content
-		content, err := ioutil.ReadFile(filePath)
+		content, err := os.ReadFile(filePath)
 		if err != nil {
 			return err
 		}
