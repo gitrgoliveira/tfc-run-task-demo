@@ -14,6 +14,7 @@ import (
 	"os"
 	"path/filepath"
 	"regexp"
+	"strings"
 	"sync"
 	"time"
 )
@@ -300,15 +301,15 @@ func processJobs(jobQueue *JobQueue) {
 			}
 
 			if len(matchCounts) > 0 && err == nil {
-				message := ""
+				var message strings.Builder
 				for pattern, count := range matchCounts {
 					if count > 0 {
-						message += fmt.Sprintf("Pattern: %s, Matches: %d\n", pattern, count)
+						message.WriteString(fmt.Sprintf("Pattern: %s, Matches: %d\n", pattern, count))
 					}
 				}
 
-				log.Println(message)
-				result := createFailedResult(message)
+				log.Println(message.String())
+				result := createFailedResult(message.String())
 				jsonData, err := json.Marshal(result)
 				if err != nil {
 					log.Println(err.Error())
@@ -411,7 +412,7 @@ func runRegexOnFolder(folderPath string, regexPatterns []string) map[string]int 
 }
 
 func readRegexPatterns(filePath string) ([]string, error) {
-	var patterns []string
+	patterns := []string{}
 
 	// Open the file
 	file, err := os.Open(filePath)
