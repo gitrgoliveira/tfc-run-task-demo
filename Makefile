@@ -1,7 +1,7 @@
 .PHONY: all clean
 
 # The name of the Go executable
-BINARY_NAME := mywebservice
+BINARY_NAME := tfc-run-task-demo
 
 all: clean build run
 
