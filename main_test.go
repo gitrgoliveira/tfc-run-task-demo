@@ -8,10 +8,13 @@ import (
 func TestReadRegexPatterns(t *testing.T) {
 	// Test case 1: Test with a valid file path
 	filePath := "patternsFile.txt"
-	expectedPatterns := []string{"provisioner\\s+\"remote-exec\"",
-		"provisioner\\s+\"local-exec\"",
-		"data\\s+\"external\"",
-		"resource\\s+\"toolbox"}
+	expectedPatterns := []string{
+		"(?s)provisioner\\s+\"remote-exec\"\\s+\\{.*?\\}",
+		"(?s)provisioner\\s+\"local-exec\"\\s+\\{.*?\\}",
+		"(?s)data\\s+\"external\"\\s+\\{.*?\\}",
+		"(?s)data\\s+\"http\\s+\\{.*?\\}",
+		"(?s)resource\\s+\"toolbox\\s+\\{.*?\\}",
+	}
 	patterns, err := readRegexPatterns(filePath)
 	if err != nil {
 		t.Errorf("Unexpected error: %v", err)
