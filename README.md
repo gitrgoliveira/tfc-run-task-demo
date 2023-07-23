@@ -31,4 +31,4 @@ To use this project, make sure to replace the placeholder logic in the `processJ
 The project requires a `patternsFile.txt` file in the same directory as the executable. This file contains the regular expression patterns to be used for matching in the `runRegexOnFolder` function. Make sure to populate this file with the desired patterns before running the project.
 
 ## Final Notes
-Most of this code (99%?), including this README, was built with ChatGPT and Codeium VSCode extension.
+Most of this code (85%?), including this README, was built with ChatGPT and Codeium VSCode extension.

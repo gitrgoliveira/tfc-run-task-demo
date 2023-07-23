@@ -14,14 +14,8 @@ import (
 	"path/filepath"
 	"regexp"
 	"strings"
-	"sync"
 	"time"
 )
-
-type JobQueue struct {
-	sync.Mutex
-	PrePlanPayloads []PrePlanPayload
-}
 
 type PrePlanPayload struct {
 	PayloadVersion                  int    `json:"payload_version"`
@@ -63,46 +57,47 @@ type ResultAttributes struct {
 	URL     string `json:"url,omitempty"`
 }
 
-func main() {
-	jobQueue := JobQueue{}
+// Queue to store the jobs (JSON payloads)
+var jobQueue = make(chan PrePlanPayload, 100)
 
+func handleRequest(w http.ResponseWriter, r *http.Request) {
+	// Check if the request method is POST
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	// log.Printf("Received payload: %s\n", string(body))
+
+	// Parse the JSON payload
+	var payload PrePlanPayload
+	err = json.Unmarshal(body, &payload)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		log.Println(err.Error())
+		return
+	}
+
+	// Add the job to the queue
+	jobQueue <- payload
+
+	// Respond with an HTTP 200 OK status
+	w.WriteHeader(http.StatusOK)
+	w.Write([]byte("200 OK"))
+}
+
+func main() {
 	// Start the job processor in a separate goroutine
-	go processJobs(&jobQueue)
+	go processJobs()
 
 	// Define the HTTP handler function
-	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
-		// Check if the request method is POST
-		if r.Method != http.MethodPost {
-			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
-			return
-		}
-
-		body, err := io.ReadAll(r.Body)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			return
-		}
-
-		// log.Printf("Received payload: %s\n", string(body))
-
-		// Parse the JSON payload
-		var payload PrePlanPayload
-		err = json.Unmarshal(body, &payload)
-		if err != nil {
-			http.Error(w, err.Error(), http.StatusBadRequest)
-			log.Println(err.Error())
-			return
-		}
-
-		// Add the job to the queue
-		jobQueue.Lock()
-		jobQueue.PrePlanPayloads = append(jobQueue.PrePlanPayloads, payload)
-		jobQueue.Unlock()
-
-		// Respond with an HTTP 200 OK status
-		w.WriteHeader(http.StatusOK)
-		w.Write([]byte("200 OK"))
-	})
+	http.HandleFunc("/", handleRequest)
 
 	// Start the server on port 80
 	log.Println("Server listening on port 80...")
@@ -116,15 +111,8 @@ func main() {
 // copies the response body to the temporary file, opens the downloaded tar.gz file for reading, creates a reader for
 // the gzip file, and extracts files from the tar archive. It returns nil if the process is successful.
 func downloadConfigVersion(url, token, filename string) error {
-	// Create a temporary file to store the downloaded tar.gz file
-	// tempFile, err := os.CreateTemp("", "download*.tar.gz")
-	tempFile, err := os.Create(filename + ".tar.gz")
-	if err != nil {
-		return err
-	}
-	defer os.Remove(tempFile.Name())
 	// Create a new HTTP request with the provided URL
-	req, err := http.NewRequest("GET", url, nil)
+	req, err := http.NewRequest(http.MethodGet, url, nil)
 	if err != nil {
 		return err
 	}
@@ -143,9 +131,15 @@ func downloadConfigVersion(url, token, filename string) error {
 
 	// Check if the response status code is 200 OK
 	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("request failed with status code: %d", resp.StatusCode)
+	}
+
+	// Create a temporary file to store the downloaded tar.gz file
+	tempFile, err := os.Create(filename + ".tar.gz")
+	if err != nil {
 		return err
 	}
-	log.Println("download OK")
+	defer os.Remove(tempFile.Name())
 
 	// Copy the response body to the temporary file
 	_, err = io.Copy(tempFile, resp.Body)
@@ -158,6 +152,7 @@ func downloadConfigVersion(url, token, filename string) error {
 	if err != nil {
 		return err
 	}
+	log.Println("download OK")
 
 	err = extractTarGz(tempFile.Name(), "./"+filename)
 	if err != nil {
@@ -227,7 +222,7 @@ func extractTarGz(tarGzFile, destination string) error {
 			}
 
 		default:
-			return err
+			return fmt.Errorf("unsupported file type: %v in %s", header.Typeflag, header.Name)
 		}
 	}
 
@@ -268,73 +263,73 @@ func sendPatchRequest(url string, payload []byte, authToken string) error {
 	return nil
 }
 
-func processJobs(jobQueue *JobQueue) {
-	for {
+func processJobs() {
+	for payload := range jobQueue {
 		// Lock the job queue
-		jobQueue.Lock()
+		// jobQueue.Lock()
 
 		// Check if there are any jobs in the queue
-		if len(jobQueue.PrePlanPayloads) > 0 {
-			// Retrieve the first job from the queue
-			payload := jobQueue.PrePlanPayloads[0]
-			jobQueue.PrePlanPayloads = jobQueue.PrePlanPayloads[1:]
+		// if len(jobQueue.PrePlanPayloads) > 0 {
+		// Retrieve the first job from the queue
+		// payload := jobQueue.PrePlanPayloads[0]
+		// jobQueue.PrePlanPayloads = jobQueue.PrePlanPayloads[1:]
 
-			log.Printf("Processing job: %+v\n", payload.RunID)
-			// Add your job processing logic here
+		log.Printf("Processing job: %+v\n", payload.RunID)
+		// Add your job processing logic here
 
-			err := downloadConfigVersion(payload.ConfigurationVersionDownloadURL, payload.AccessToken, payload.RunID)
+		err := downloadConfigVersion(payload.ConfigurationVersionDownloadURL, payload.AccessToken, payload.RunID)
+		if err != nil {
+			log.Println(err.Error())
+		}
+
+		patternsFile := "patternsFile.txt"
+		patterns, err := readRegexPatterns(patternsFile)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		matchCounts := runRegexOnFolder(payload.RunID, patterns)
+		err = os.RemoveAll("./" + payload.RunID)
+		if err != nil {
+			log.Fatal(err)
+		}
+
+		if len(matchCounts) > 0 && err == nil {
+			var message strings.Builder
+			for pattern, count := range matchCounts {
+				if count > 0 {
+					message.WriteString(fmt.Sprintf("Pattern: %s, Matches: %d\n", pattern, count))
+				}
+			}
+
+			log.Println(message.String())
+			result := createFailedResult(message.String())
+			jsonData, err := json.Marshal(result)
 			if err != nil {
 				log.Println(err.Error())
 			}
 
-			patternsFile := "patternsFile.txt"
-			patterns, err := readRegexPatterns(patternsFile)
+			err = sendPatchRequest(payload.TaskResultCallbackURL, jsonData, payload.AccessToken)
 			if err != nil {
-				log.Fatal(err)
+				log.Println(err.Error())
 			}
 
-			matchCounts := runRegexOnFolder(payload.RunID, patterns)
-			err = os.RemoveAll("./" + payload.RunID)
+		} else {
+			result := createPassedResult("Configured patterns not found")
+			jsonData, err := json.Marshal(result)
 			if err != nil {
-				log.Fatal(err)
+				log.Println(err.Error())
 			}
 
-			if len(matchCounts) > 0 && err == nil {
-				var message strings.Builder
-				for pattern, count := range matchCounts {
-					if count > 0 {
-						message.WriteString(fmt.Sprintf("Pattern: %s, Matches: %d\n", pattern, count))
-					}
-				}
-
-				log.Println(message.String())
-				result := createFailedResult(message.String())
-				jsonData, err := json.Marshal(result)
-				if err != nil {
-					log.Println(err.Error())
-				}
-
-				err = sendPatchRequest(payload.TaskResultCallbackURL, jsonData, payload.AccessToken)
-				if err != nil {
-					log.Println(err.Error())
-				}
-
-			} else {
-				result := createPassedResult("Configured patterns not found")
-				jsonData, err := json.Marshal(result)
-				if err != nil {
-					log.Println(err.Error())
-				}
-
-				err = sendPatchRequest(payload.TaskResultCallbackURL, jsonData, payload.AccessToken)
-				if err != nil {
-					log.Println(err.Error())
-				}
+			err = sendPatchRequest(payload.TaskResultCallbackURL, jsonData, payload.AccessToken)
+			if err != nil {
+				log.Println(err.Error())
 			}
 		}
+		// }
 
 		// Unlock the job queue
-		jobQueue.Unlock()
+		// jobQueue.Unlock()
 
 		// Sleep for some time before checking for the next job
 		time.Sleep(1 * time.Second)

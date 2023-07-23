@@ -1,4 +1,5 @@
-provisioner\s+"remote-exec"
-provisioner\s+"local-exec"
-data\s+"external"
-resource\s+"toolbox
+(?s)provisioner\s+"remote-exec"\s+\{.*?\}
+(?s)provisioner\s+"local-exec"\s+\{.*?\}
+(?s)data\s+"external"\s+\{.*?\}
+(?s)data\s+"http\s+\{.*?\}
+(?s)resource\s+"toolbox\s+\{.*?\}
